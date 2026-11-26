@@ -25,10 +25,19 @@ API 默认监听 `127.0.0.1:19343`。接口文档在 `/api/docs`，机器可读�
 3. `POST /api/runs` 提交 `dataset_id`、`label` 和可选的 `settings`。响应包含运行 ID 及最终状态。`GET /api/runs/{id}` 返回业务指标、表格或失败原因。
 4. 负责人调用 `POST /api/runs/{id}/review`，提交 `decision`（`approved` 或 `rejected`）和 `note`。批准后可通过 `GET /api/runs/{id}/export/{table_key}` 下载业务表。表名和字段从运行结果取得。
 
+## 新旧模型在线试用
+
+在归档回放之外，另提供顺序换版试用：同批件先由新旧两版锁定预判，末检乱序回来后按预判顺序整批入账，用同一套误报/漏报代价核算每批节省，并以 e 过程把"新版平均不省工时误换"的概率控制在 5% 以内。口径与接口见 [`backend/src/domain/trial/README.md`](backend/src/domain/trial/README.md)。
+
+1. `POST /api/model-trials` 创建试用（代价、目标每件节省、可选方差上界）。
+2. `POST /api/model-trials/{id}/lock` 锁定一批的新旧预判；末检通过 `POST /inspections`（整批）或 `POST /inspection`（单件）乱序、幂等提交。
+3. `POST /api/model-trials/{id}/drain` 按预判顺序整批入账并更新证据，重复调用不重复计批；`GET /api/model-trials/{id}` 可查达标批次与各批代价差。
+4. 首次达标（e 值 ≥ 20）后，负责人 `POST /api/model-trials/{id}/export` 导出唯一的正式换版凭证（带哈希、幂等）；未达标可 `POST /end` 维持旧版。
+
 ## 代码与配置
 
-- `backend/src/domain` 实现数据规范、模拟样本和业务算法。
-- `backend/src/services` 与 `backend/src/models` 实现台账、计算、用户权限和复核记录。
+- `backend/src/domain` 实现数据规范、模拟样本和业务算法；`backend/src/domain/trial` 为零第三方依赖的新旧模型顺序换版试用（代价、乱序入账、e 过程与换版导出）。
+- `backend/src/services` 与 `backend/src/models` 实现台账、计算、用户权限、复核记录和试用持久化（`trials.py`、`models/trial.py`）。
 - `backend/src/routes`、`schemas` 和 `controllers` 提供 FastAPI 接口与输入输出约束。
 - `backend/migrations` 和 `backend/scripts` 提供 SQLite 初始化和可重复执行的演示数据装载。
 
